@@ -38,6 +38,50 @@ def lambda_handler(event, context):
 
     print("=== metadata extractor invoked ===")
 
+    # loop through SNS records
+    for record in event['Records']:
+        sns_message = record['Sns']['Message']
+
+        # parse SNS message (this gives S3 event)
+        s3_event = json.loads(sns_message)
+
+        # loop through S3 records
+        for s3_record in s3_event['Records']:
+            bucket = s3_record['s3']['bucket']['name']
+            key = s3_record['s3']['object']['key']
+            size = s3_record['s3']['object']['size']
+            event_time = s3_record['eventTime']
+
+            # REQUIRED LOG FORMAT
+            print(f"[METADATA] File: {key}")
+            print(f"[METADATA] Bucket: {bucket}")
+            print(f"[METADATA] Size: {size} bytes")
+            print(f"[METADATA] Upload Time: {event_time}")
+
+            # build metadata dict
+            metadata = {
+                "file": key,
+                "bucket": bucket,
+                "size": size,
+                "upload_time": event_time
+            }
+
+            # extract filename (without extension)
+            filename = os.path.splitext(key.split('/')[-1])[0]
+
+            # write JSON to S3
+            s3.put_object(
+                Bucket=bucket,
+                Key=f"processed/metadata/{filename}.json",
+                Body=json.dumps(metadata),
+                ContentType='application/json'
+            )
+
+    return {
+        'statusCode': 200,
+        'body': 'metadata extracted'
+    }
+
     # todo: loop through event['Records']
     # todo: for each record, get the SNS message string from record['Sns']['Message']
     # todo: parse the SNS message string as JSON to get the S3 event
@@ -58,4 +102,3 @@ def lambda_handler(event, context):
     #       hint: s3.put_object(Bucket=bucket, Key=f"processed/metadata/{filename}.json",
     #             Body=json.dumps(metadata), ContentType='application/json')
 
-    return {'statusCode': 200, 'body': 'metadata extracted'}
